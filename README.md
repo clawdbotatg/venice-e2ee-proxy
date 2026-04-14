@@ -115,6 +115,46 @@ Venice offers several E2EE models:
 - `e2ee-qwen3-30b-a3b-p` — Qwen 3 30B
 - `e2ee-qwen3-5-122b-a10b` — Qwen 3.5 122B
 
+## Example: Interactive Chat REPL
+
+An interactive chat script is included in `examples/chat.js`. Start the proxy first, then run it:
+
+```bash
+# Terminal 1 — start the proxy
+node dist/index.js
+
+# Terminal 2 — start the chat REPL
+node examples/chat.js
+```
+
+```
+┌─────────────────────────────────────────┐
+│  🔐  venice-e2ee-proxy  —  chat REPL    │
+└─────────────────────────────────────────┘
+
+  proxy:  http://localhost:3333
+  model:  e2ee-glm-5
+  e2ee:   active — attestation age 13s
+
+  type a message and press enter. ctrl+c to quit.
+  commands: /clear  /history  /quit
+
+you  hello, are my messages encrypted?
+
+assistant 🔐 e2ee  Yes — your messages are end-to-end encrypted to a
+Venice TEE. Neither Venice's servers nor any network intermediary can
+read them. Only the model inside the hardware enclave can decrypt them.
+
+you  /quit
+bye.
+```
+
+Set `PROXY_URL` or `MODEL` env vars to override defaults:
+
+```bash
+PROXY_URL=http://localhost:4444 MODEL=e2ee-qwen3-5-122b-a10b node examples/chat.js
+```
+
 ## Endpoints
 
 | Endpoint | Method | Description |
