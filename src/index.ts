@@ -3,7 +3,7 @@
  * index.ts — CLI entrypoint for venice-e2ee-proxy
  */
 import * as dotenv from "dotenv";
-dotenv.config(); // load .env before anything else
+dotenv.config({ quiet: true }); // load .env — quiet suppresses dotenv's own stdout logging
 
 import { Command } from "commander";
 import { getModelPublicKey } from "./attestation";

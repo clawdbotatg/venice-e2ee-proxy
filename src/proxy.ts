@@ -24,22 +24,25 @@ function decryptCollectedChunks(
   const concatenated = chunks.join("");
   try {
     const result = decryptResponseContent(concatenated, clientPrivateKey);
-    if (verbose) {
-      console.log(`[e2ee] decrypted ${label} (concatenated) → ${result.length} chars`);
-    }
-    return result;
-  } catch {
-    // Strategy 2: Each chunk is independently encrypted
-    try {
-      const result = decryptResponseChunks(chunks, clientPrivateKey);
+    // Only accept if something was actually decrypted (result changed)
+    if (result !== concatenated) {
       if (verbose) {
-        console.log(`[e2ee] decrypted ${label} (${chunks.length} individual chunks) → ${result.length} chars`);
+        console.log(`[e2ee] decrypted ${label} (concatenated) → ${result.length} chars`);
       }
       return result;
-    } catch (err) {
-      console.error(`[e2ee] Failed to decrypt ${label}:`, err);
-      return concatenated; // Return raw as fallback
     }
+  } catch {}
+
+  // Strategy 2: Each chunk is independently encrypted
+  try {
+    const result = decryptResponseChunks(chunks, clientPrivateKey);
+    if (verbose) {
+      console.log(`[e2ee] decrypted ${label} (${chunks.length} individual chunks) → ${result.length} chars`);
+    }
+    return result;
+  } catch (err) {
+    console.error(`[e2ee] Failed to decrypt ${label}:`, err);
+    return concatenated; // Return raw as fallback
   }
 }
 
@@ -92,7 +95,11 @@ export async function proxyRequest(opts: ProxyOptions): Promise<void> {
 
   if (!veniceRes.ok) {
     const errBody = await veniceRes.text();
-    console.error(`[proxy] Venice error (${veniceRes.status}): ${errBody}`);
+    if (verbose) {
+      console.error(`[proxy] Venice error (${veniceRes.status}): ${errBody}`);
+    } else {
+      console.error(`[proxy] Venice error (${veniceRes.status})`);
+    }
     res.status(veniceRes.status).json({
       error: {
         message: `Venice API error: ${errBody}`,
@@ -148,11 +155,17 @@ async function handleNonStreamingResponse(
 
     // Decrypt main content
     if (typeof msg.content === "string") {
-      const decrypted = decryptResponseContent(msg.content, clientPrivateKey);
-      if (verbose && decrypted !== msg.content) {
-        console.log(`[e2ee] decrypted response content: ${decrypted.length} chars`);
+      let content = decryptResponseContent(msg.content, clientPrivateKey);
+      // Handle <think>...</think> embedded reasoning
+      const thinkMatch = content.match(/^<think>([\s\S]*?)<\/think>([\s\S]*)$/);
+      if (thinkMatch) {
+        msg.reasoning_content = (msg.reasoning_content ?? "") + thinkMatch[1].trim();
+        content = thinkMatch[2].trim();
       }
-      msg.content = decrypted;
+      if (verbose && content !== msg.content) {
+        console.log(`[e2ee] decrypted response content: ${content.length} chars`);
+      }
+      msg.content = content;
     }
 
     // Decrypt reasoning_content if present
@@ -247,8 +260,16 @@ async function handleStreamingResponse(
   }
 
   // Decrypt content chunks
-  const decryptedContent = decryptCollectedChunks(encryptedContentChunks, clientPrivateKey, "content", verbose);
-  const decryptedReasoning = decryptCollectedChunks(encryptedReasoningChunks, clientPrivateKey, "reasoning", verbose);
+  let decryptedContent = decryptCollectedChunks(encryptedContentChunks, clientPrivateKey, "content", verbose);
+  let decryptedReasoning = decryptCollectedChunks(encryptedReasoningChunks, clientPrivateKey, "reasoning", verbose);
+
+  // Some models (e.g. GLM-5) embed reasoning as <think>...</think> inside the content field.
+  // Extract it and move to reasoning so callers can handle it separately.
+  const thinkMatch = decryptedContent.match(/^<think>([\s\S]*?)<\/think>([\s\S]*)$/);
+  if (thinkMatch) {
+    decryptedReasoning = thinkMatch[1].trim() + (decryptedReasoning ? "\n" + decryptedReasoning : "");
+    decryptedContent = thinkMatch[2].trim();
+  }
 
   // Re-emit as standard OpenAI SSE
   res.setHeader("Content-Type", "text/event-stream");

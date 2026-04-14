@@ -64,8 +64,11 @@ npm run build
 # Configure — add your Venice API key (https://venice.ai/settings/api)
 echo "VENICE_API_KEY=your-key-here" > .env
 
+# Install the command globally
+npm link
+
 # Run
-node dist/index.js
+venice-e2ee-proxy
 ```
 
 That's it. Every tool you point at `http://localhost:3333` will have transparent E2EE — no key passing required downstream.
@@ -95,7 +98,7 @@ curl http://localhost:3333/v1/chat/completions \
 Use `--list-models` to see everything currently available on Venice, with context size, capabilities, and pricing:
 
 ```bash
-node dist/index.js --list-models
+venice-e2ee-proxy --list-models
 ```
 
 ```
@@ -120,13 +123,13 @@ Then pass `--model` to select one:
 
 ```bash
 # Largest context (256K), cheap
-node dist/index.js --model e2ee-qwen3-30b-a3b-p
+venice-e2ee-proxy --model e2ee-qwen3-30b-a3b-p
 
 # Best overall: reasoning + vision + tools + 128K
-node dist/index.js --model e2ee-qwen3-5-122b-a10b
+venice-e2ee-proxy --model e2ee-qwen3-5-122b-a10b
 
 # Cheapest with reasoning ($0.05 in / $0.19 out)
-node dist/index.js --model e2ee-gpt-oss-20b-p
+venice-e2ee-proxy --model e2ee-gpt-oss-20b-p
 ```
 
 The model list is fetched live from Venice, so it stays current as new E2EE models are added.
@@ -148,7 +151,7 @@ An interactive chat script is included in `examples/chat.js`. Start the proxy fi
 
 ```bash
 # Terminal 1 — start the proxy
-node dist/index.js
+venice-e2ee-proxy
 
 # Terminal 2 — start the chat REPL
 node examples/chat.js

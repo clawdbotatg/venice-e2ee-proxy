@@ -3,7 +3,7 @@
  * examples/chat.js
  *
  * Interactive E2EE chat REPL — talks to venice-e2ee-proxy on localhost.
- * Start the proxy first: node dist/index.js
+ * Start the proxy first: venice-e2ee-proxy
  * Then run: node examples/chat.js
  */
 
@@ -15,16 +15,32 @@ const MODEL = process.env.MODEL || "e2ee-glm-5";
 
 const history = [];
 
-const RESET = "\x1b[0m";
-const DIM = "\x1b[2m";
-const BOLD = "\x1b[1m";
-const CYAN = "\x1b[36m";
-const GREEN = "\x1b[32m";
+const RESET  = "\x1b[0m";
+const DIM    = "\x1b[2m";
+const BOLD   = "\x1b[1m";
+const CYAN   = "\x1b[36m";
+const GREEN  = "\x1b[32m";
 const YELLOW = "\x1b[33m";
 const MAGENTA = "\x1b[35m";
-const RED = "\x1b[31m";
+const RED    = "\x1b[31m";
+const GRAY   = "\x1b[90m";
 
-// ── Check proxy is running ────────────────────────────────────────────────────
+// ── Spinner ───────────────────────────────────────────────────────────────────
+
+const SPINNER_FRAMES = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
+
+function startSpinner(label) {
+  let i = 0;
+  const id = setInterval(() => {
+    process.stdout.write(`\r${GRAY}${SPINNER_FRAMES[i++ % SPINNER_FRAMES.length]}  ${label}${RESET}`);
+  }, 80);
+  return function stop() {
+    clearInterval(id);
+    process.stdout.write("\r\x1b[K"); // clear line
+  };
+}
+
+// ── Health check ──────────────────────────────────────────────────────────────
 
 async function checkProxy() {
   return new Promise((resolve) => {
@@ -33,24 +49,28 @@ async function checkProxy() {
         let body = "";
         res.on("data", (d) => (body += d));
         res.on("end", () => {
-          try {
-            resolve(JSON.parse(body));
-          } catch {
-            resolve(null);
-          }
+          try { resolve(JSON.parse(body)); }
+          catch { resolve(null); }
         });
       })
       .on("error", () => resolve(null));
   });
 }
 
-// ── Stream a chat completion from the proxy ──────────────────────────────────
+// ── Stream a chat completion ──────────────────────────────────────────────────
 
 async function streamChat(messages) {
   const body = JSON.stringify({ model: MODEL, messages, stream: true });
   const url = new URL(`${PROXY_URL}/v1/chat/completions`);
 
   return new Promise((resolve, reject) => {
+    let fullContent = "";
+    let buffer = "";
+    let headerPrinted = false;
+
+    // Start spinner now — before the request even goes out
+    let stopSpinner = startSpinner("thinking...");
+
     const req = http.request(
       {
         hostname: url.hostname,
@@ -60,26 +80,21 @@ async function streamChat(messages) {
         headers: {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(body),
-          Authorization: "Bearer local",
         },
       },
       (res) => {
         if (res.statusCode !== 200) {
+          if (stopSpinner) { stopSpinner(); stopSpinner = null; }
           let errBody = "";
           res.on("data", (d) => (errBody += d));
           res.on("end", () => reject(new Error(`Proxy error ${res.statusCode}: ${errBody}`)));
           return;
         }
 
-        let fullContent = "";
-        let buffer = "";
-
-        process.stdout.write(`\n${GREEN}${BOLD}assistant${RESET} ${DIM}🔐 e2ee${RESET}  `);
-
         res.on("data", (chunk) => {
           buffer += chunk.toString();
           const lines = buffer.split("\n");
-          buffer = lines.pop(); // keep incomplete line
+          buffer = lines.pop();
 
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
@@ -90,23 +105,33 @@ async function streamChat(messages) {
               const parsed = JSON.parse(data);
               const delta = parsed.choices?.[0]?.delta;
               if (delta?.content) {
+                if (stopSpinner) { stopSpinner(); stopSpinner = null; }
+                if (!headerPrinted) {
+                  process.stdout.write(`\n${GREEN}${BOLD}assistant${RESET} ${GRAY}🔐 e2ee${RESET}  `);
+                  headerPrinted = true;
+                }
                 process.stdout.write(delta.content);
                 fullContent += delta.content;
               }
-              // Skip reasoning_content — don't show thinking noise in the REPL
-            } catch {
-              // ignore parse errors
-            }
+              // reasoning_content is intentionally skipped (internal thinking)
+            } catch {}
           }
         });
 
         res.on("end", () => {
+          if (stopSpinner) { stopSpinner(); stopSpinner = null; }
+          if (!headerPrinted) {
+            process.stdout.write(`\n${GREEN}${BOLD}assistant${RESET} ${GRAY}🔐 e2ee${RESET}  ${DIM}(no response)${RESET}`);
+          }
           process.stdout.write("\n\n");
           resolve(fullContent);
         });
 
-        res.on("error", reject);
-      }
+        res.on("error", (err) => {
+          if (stopSpinner) { stopSpinner(); stopSpinner = null; }
+          reject(err);
+        });
+      },
     );
 
     req.on("error", reject);
@@ -118,15 +143,13 @@ async function streamChat(messages) {
 // ── REPL ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  // Check proxy
   const health = await checkProxy();
   if (!health) {
-    console.error(`\n${RED}✗ Cannot reach proxy at ${PROXY_URL}${RESET}`);
-    console.error(`  Start it first: ${DIM}node dist/index.js${RESET}\n`);
+    console.error(`\n${RED}✗  Cannot reach proxy at ${PROXY_URL}${RESET}`);
+    console.error(`   Start it first: ${DIM}venice-e2ee-proxy${RESET}\n`);
     process.exit(1);
   }
 
-  // Banner
   console.clear();
   console.log(`${BOLD}${MAGENTA}┌─────────────────────────────────────────┐${RESET}`);
   console.log(`${BOLD}${MAGENTA}│  🔐  venice-e2ee-proxy  —  chat REPL    │${RESET}`);
@@ -147,15 +170,11 @@ async function main() {
   });
 
   const prompt = () => {
-    rl.question(`${CYAN}${BOLD}you${RESET}  `, async (input) => {
+    rl.question(`${CYAN}${BOLD}❯${RESET}  `, async (input) => {
       const trimmed = input.trim();
 
-      if (!trimmed) {
-        prompt();
-        return;
-      }
+      if (!trimmed) { prompt(); return; }
 
-      // Commands
       if (trimmed === "/quit" || trimmed === "/exit") {
         console.log(`\n${DIM}bye.${RESET}\n`);
         rl.close();
@@ -177,7 +196,8 @@ async function main() {
         } else {
           for (const msg of history) {
             const label = msg.role === "user" ? CYAN : GREEN;
-            console.log(`  ${label}${msg.role}:${RESET} ${msg.content.slice(0, 80)}${msg.content.length > 80 ? "…" : ""}`);
+            const preview = msg.content.slice(0, 80);
+            console.log(`  ${label}${msg.role}:${RESET} ${preview}${msg.content.length > 80 ? "…" : ""}`);
           }
         }
         console.log();
@@ -185,17 +205,13 @@ async function main() {
         return;
       }
 
-      // Add to history and send
       history.push({ role: "user", content: trimmed });
 
       try {
         const reply = await streamChat(history);
-        if (reply) {
-          history.push({ role: "assistant", content: reply });
-        }
+        if (reply) history.push({ role: "assistant", content: reply });
       } catch (err) {
         console.error(`\n${RED}error: ${err.message}${RESET}\n`);
-        // Pop the user message so they can retry
         history.pop();
       }
 
