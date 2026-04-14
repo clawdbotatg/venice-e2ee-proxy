@@ -75,22 +75,28 @@ That's it. Every tool you point at `http://localhost:3333` will have transparent
 
 Then point your tool at `http://localhost:3333`:
 
-```bash
-# OpenAI SDK
+```python
+# Python — OpenAI SDK
 from openai import OpenAI
 client = OpenAI(api_key="your-venice-key", base_url="http://localhost:3333/v1")
 response = client.chat.completions.create(
     model="e2ee-glm-5",
     messages=[{"role": "user", "content": "Hello!"}]
 )
+```
 
+```bash
 # curl
 curl http://localhost:3333/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"e2ee-glm-5","messages":[{"role":"user","content":"Hello!"}]}'
+```
 
-# Cursor / any OpenAI-compatible tool
-# Set base URL to: http://localhost:3333/v1
+```
+# Cursor / Windsurf / any OpenAI-compatible tool
+# Settings → AI Provider → OpenAI-compatible
+# Base URL: http://localhost:3333/v1
+# API Key:  (anything — the proxy uses your .env key)
 ```
 
 ## Selecting a model
@@ -200,6 +206,7 @@ PROXY_URL=http://localhost:4444 MODEL=e2ee-qwen3-5-122b-a10b node examples/chat.
 - **The attestation is verified.** The proxy checks the Intel TDX nonce binding and `verified` flag before trusting the model's public key.
 - **Per-request ephemeral keys.** Each request uses a fresh ECDH keypair — no key reuse.
 - **The proxy is local.** It binds to `127.0.0.1` only — not accessible from the network.
+- **Nothing is logged or persisted.** The proxy logs only metadata (model name, status codes). No message content, no response content, no disk writes of any kind. Conversation history in `examples/chat.js` lives in RAM only and is gone the moment you close it.
 
 ## Architecture
 
@@ -221,8 +228,17 @@ Minimal, auditable dependencies:
 - `@noble/ciphers` — AES-GCM
 - `express` — HTTP server
 - `commander` — CLI parsing
+- `dotenv` — `.env` file loading
 
 No heavy frameworks. No WASM. No native modules.
+
+## Testing
+
+```bash
+npm test                 # 55 unit tests — pure crypto + mock attestation, no network
+npm run test:integration # 13 live tests against real Venice API (needs VENICE_API_KEY)
+npm run test:all         # everything
+```
 
 ## License
 
