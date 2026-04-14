@@ -48,7 +48,7 @@ Venice launched TEE + E2EE inference in March 2026. Their web UI does E2EE. Thei
 
 **All message roles are encrypted** (system, user, assistant). Venice returns 400 if you send mixed plaintext/ciphertext.
 
-**Streaming responses:** Venice sends each SSE chunk with independently encrypted `delta.content` and `delta.reasoning_content` fields. The proxy collects all chunks, decrypts each one individually, then re-emits as standard OpenAI SSE to the caller.
+**Streaming responses:** Venice sends each SSE chunk with independently encrypted `delta.content` and `delta.reasoning_content` fields. The proxy collects all chunks, decrypts them (handling both single-blob and per-chunk encryption), strips any `<think>...</think>` wrapper that reasoning models embed in the content field, then re-emits as standard OpenAI SSE to the caller.
 
 **Non-streaming responses:** The response has encrypted `content` and `reasoning_content` fields, each a single hex blob. The proxy decrypts both and returns standard OpenAI JSON.
 
@@ -169,13 +169,13 @@ node examples/chat.js
   type a message and press enter. ctrl+c to quit.
   commands: /clear  /history  /quit
 
-you  hello, are my messages encrypted?
+❯  hello, are my messages encrypted?
 
 assistant 🔐 e2ee  Yes — your messages are end-to-end encrypted to a
 Venice TEE. Neither Venice's servers nor any network intermediary can
 read them. Only the model inside the hardware enclave can decrypt them.
 
-you  /quit
+❯  /quit
 bye.
 ```
 
