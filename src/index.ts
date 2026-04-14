@@ -2,6 +2,9 @@
 /**
  * index.ts — CLI entrypoint for venice-e2ee-proxy
  */
+import * as dotenv from "dotenv";
+dotenv.config(); // load .env before anything else
+
 import { Command } from "commander";
 import { getModelPublicKey } from "./attestation";
 import { createServer } from "./server";

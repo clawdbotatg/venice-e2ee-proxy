@@ -61,12 +61,15 @@ cd venice-e2ee-proxy
 npm install
 npm run build
 
-# Run
-node dist/index.js --key YOUR_VENICE_API_KEY
+# Configure
+cp .env.example .env
+# Edit .env and add your Venice API key (https://venice.ai/settings/api)
 
-# Or with env var
-VENICE_API_KEY=your_key node dist/index.js
+# Run
+node dist/index.js
 ```
+
+That's it. Every tool you point at `http://localhost:3333` will have transparent E2EE — no key passing required downstream.
 
 Then point your tool at `http://localhost:3333`:
 
