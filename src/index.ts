@@ -7,6 +7,7 @@ dotenv.config(); // load .env before anything else
 
 import { Command } from "commander";
 import { getModelPublicKey } from "./attestation";
+import { fetchE2EEModels, printModelTable } from "./models";
 import { createServer } from "./server";
 
 process.on("unhandledRejection", (err) => {
@@ -26,6 +27,7 @@ program
   .option("-k, --key <key>", "Venice API key (or VENICE_API_KEY env)")
   .option("-p, --port <port>", "Port to listen on", "3333")
   .option("-m, --model <model>", "E2EE model to use", "e2ee-glm-5")
+  .option("--list-models", "List available E2EE models and exit")
   .option("--no-verify", "Skip attestation verification (dev only)")
   .option("--verbose", "Verbose logging", false)
   .action(async (opts) => {
@@ -35,9 +37,27 @@ program
       process.exit(1);
     }
 
+    // --list-models: fetch live model list, print, exit
+    if (opts.listModels) {
+      try {
+        console.log("   Fetching available E2EE models from Venice...");
+        const models = await fetchE2EEModels(apiKey);
+        printModelTable(models);
+      } catch (err: any) {
+        console.error(`Error fetching models: ${err.message}`);
+        process.exit(1);
+      }
+      process.exit(0);
+    }
+
     const port = parseInt(opts.port, 10);
     const model = opts.model;
     const verbose = opts.verbose;
+
+    if (!model.startsWith("e2ee-")) {
+      console.warn(`⚠  Warning: "${model}" doesn't look like an E2EE model (expected e2ee-* prefix).`);
+      console.warn(`   Run with --list-models to see available E2EE models.`);
+    }
 
     console.log(`🔐 venice-e2ee-proxy v1.0.0`);
     console.log(`   Model: ${model}`);

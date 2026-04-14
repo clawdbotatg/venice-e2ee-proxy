@@ -61,9 +61,8 @@ cd venice-e2ee-proxy
 npm install
 npm run build
 
-# Configure
-cp .env.example .env
-# Edit .env and add your Venice API key (https://venice.ai/settings/api)
+# Configure — add your Venice API key (https://venice.ai/settings/api)
+echo "VENICE_API_KEY=your-key-here" > .env
 
 # Run
 node dist/index.js
@@ -91,6 +90,47 @@ curl http://localhost:3333/v1/chat/completions \
 # Set base URL to: http://localhost:3333/v1
 ```
 
+## Selecting a model
+
+Use `--list-models` to see everything currently available on Venice, with context size, capabilities, and pricing:
+
+```bash
+node dist/index.js --list-models
+```
+
+```
+🔐 E2EE Models available on Venice
+
+  MODEL ID                      NAME                  CTX    CAPS                    PRICE (per M tok)
+  ──────────────────────────────────────────────────────────────────────────────────────────────────────
+  e2ee-qwen3-30b-a3b-p          Qwen3 30B A3B        256K   tools                   $0.19 / $0.69
+  e2ee-glm-4-7-flash-p          GLM 4.7 Flash        198K   code                    $0.13 / $0.55
+  e2ee-glm-5                    GLM 5                198K   think  tools            $1.10 / $4.15
+  e2ee-glm-4-7-p                GLM 4.7              128K   think  code             $1.10 / $4.15
+  e2ee-gpt-oss-20b-p            GPT OSS 20B          128K   think                   $0.05 / $0.19
+  e2ee-gpt-oss-120b-p           GPT OSS 120B         128K   think                   $0.13 / $0.65
+  e2ee-qwen3-vl-30b-a3b-p       Qwen3 VL 30B A3B     128K   vision  tools           $0.25 / $0.90
+  e2ee-qwen3-5-122b-a10b        Qwen3.5 122B A10B    128K   think  vision  tools    $0.50 / $4.00
+  e2ee-gemma-3-27b-p            Gemma 3 27B           40K                            $0.14 / $0.50
+  e2ee-venice-uncensored-24b-p  Venice Uncensored 1.1 32K                            $0.25 / $1.15
+  e2ee-qwen-2-5-7b-p            Qwen 2.5 7B           32K                            $0.05 / $0.13
+```
+
+Then pass `--model` to select one:
+
+```bash
+# Largest context (256K), cheap
+node dist/index.js --model e2ee-qwen3-30b-a3b-p
+
+# Best overall: reasoning + vision + tools + 128K
+node dist/index.js --model e2ee-qwen3-5-122b-a10b
+
+# Cheapest with reasoning ($0.05 in / $0.19 out)
+node dist/index.js --model e2ee-gpt-oss-20b-p
+```
+
+The model list is fetched live from Venice, so it stays current as new E2EE models are added.
+
 ## Options
 
 | Flag | Env | Default | Description |
@@ -98,22 +138,9 @@ curl http://localhost:3333/v1/chat/completions \
 | `--key` | `VENICE_API_KEY` | required | Your Venice API key |
 | `--port` | — | `3333` | Local port to listen on |
 | `--model` | — | `e2ee-glm-5` | Venice E2EE model to use |
+| `--list-models` | — | — | List available E2EE models and exit |
 | `--no-verify` | — | false | Skip attestation verification (dev only) |
 | `--verbose` | — | false | Log encryption/decryption details |
-
-## Available E2EE Models
-
-Venice offers several E2EE models:
-- `e2ee-glm-5` (default) — GLM-5
-- `e2ee-glm-4-7-p` — GLM 4.7
-- `e2ee-glm-4-7-flash-p` — GLM 4.7 Flash
-- `e2ee-gemma-3-27b-p` — Gemma 3 27B
-- `e2ee-venice-uncensored-24b-p` — Venice Uncensored 24B
-- `e2ee-gpt-oss-20b-p` — GPT-OSS 20B
-- `e2ee-gpt-oss-120b-p` — GPT-OSS 120B
-- `e2ee-qwen-2-5-7b-p` — Qwen 2.5 7B
-- `e2ee-qwen3-30b-a3b-p` — Qwen 3 30B
-- `e2ee-qwen3-5-122b-a10b` — Qwen 3.5 122B
 
 ## Example: Interactive Chat REPL
 
@@ -160,7 +187,7 @@ PROXY_URL=http://localhost:4444 MODEL=e2ee-qwen3-5-122b-a10b node examples/chat.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/v1/chat/completions` | POST | E2EE proxy — encrypts request, decrypts response |
-| `/v1/models` | GET | Passthrough to Venice (no E2EE) |
+| `/v1/models` | GET | Lists E2EE-capable models only |
 | `/health` | GET | Health check with attestation age |
 
 ## Security model
@@ -175,10 +202,11 @@ PROXY_URL=http://localhost:4444 MODEL=e2ee-qwen3-5-122b-a10b node examples/chat.
 
 ```
 src/
-├── index.ts          — CLI entrypoint (Commander, startup banner)
+├── index.ts          — CLI entrypoint (Commander, startup banner, --list-models)
 ├── server.ts         — Express server, OpenAI-compatible routes
 ├── e2ee.ts           — Encryption/decryption (secp256k1 + HKDF + AES-GCM)
 ├── attestation.ts    — Fetch + verify + cache TEE attestation
+├── models.ts         — Fetch + display available E2EE models
 └── proxy.ts          — Forward to Venice, handle streaming/non-streaming responses
 ```
 

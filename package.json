@@ -9,7 +9,10 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts"
+    "dev": "ts-node src/index.ts",
+    "test": "npm run build && node --test tests/unit/e2ee.test.js tests/unit/attestation.test.js",
+    "test:integration": "npm run build && node --test tests/integration/proxy.test.js",
+    "test:all": "npm run build && node --test tests/unit/e2ee.test.js tests/unit/attestation.test.js tests/integration/proxy.test.js"
   },
   "dependencies": {
     "@noble/ciphers": "^1.0.0",

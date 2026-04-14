@@ -27,14 +27,16 @@ export function createServer(config: ServerConfig): express.Express {
     });
   });
 
-  // Models passthrough
+  // Models — returns only E2EE-capable models
   app.get("/v1/models", async (_req, res) => {
     try {
       const veniceRes = await fetch("https://api.venice.ai/api/v1/models", {
         headers: { Authorization: `Bearer ${config.apiKey}` },
       });
-      const data = await veniceRes.json();
-      res.json(data);
+      const data: any = await veniceRes.json();
+      const all: any[] = data.data || data;
+      const e2eeModels = all.filter(m => m.model_spec?.capabilities?.supportsE2EE === true);
+      res.json({ object: "list", data: e2eeModels });
     } catch (err) {
       console.error("[models] Error fetching models:", err);
       res.status(502).json({ error: { message: "Failed to fetch models from Venice" } });
