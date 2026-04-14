@@ -25,7 +25,11 @@ Your tool (Cursor, Claude Code, any OpenAI SDK)
 
 ## Why this exists
 
-Venice launched TEE + E2EE inference in March 2026. Their web UI does E2EE. Their CLI (`veniceai-cli`) does E2EE. But if you want to use Cursor, Claude Code, or any tool that speaks the OpenAI API — you're sending plaintext to Venice. This proxy closes that gap.
+Venice launched TEE + E2EE inference in March 2026. Their web UI and CLI (`veniceai-cli`) both perform client-side encryption — Venice's servers only receive ciphertext, and the TEE enclave is the only place decryption happens.
+
+But there's an important distinction: the web UI's encryption code is JavaScript served by Venice's own servers on every page load. You're trusting Venice to serve honest code. If their servers were compromised, malicious JS could exfiltrate your plaintext or keys before encryption.
+
+This proxy is different. The encryption runs locally, from code you can audit and pin. Venice's servers are never in the path of serving the encryption logic. And if you want to use Cursor, Claude Code, or any other tool that speaks the OpenAI API — you'd otherwise be sending plaintext to Venice with no E2EE at all. This proxy closes that gap for any OpenAI-compatible tool, with stronger trust guarantees than the web UI.
 
 ## How it works
 
