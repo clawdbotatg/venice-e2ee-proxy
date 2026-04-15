@@ -3,7 +3,7 @@
 A local OpenAI-compatible proxy that adds transparent end-to-end encryption to every request you send to Venice AI's TEE models.
 
 ```
-Your tool (Cursor, Claude Code, any OpenAI SDK)
+Your tool (Continue.dev, any OpenAI SDK, your own scripts)
         │
         ▼  http://localhost:3333  (plaintext — stays on your machine)
 ┌──────────────────────────┐
@@ -21,15 +21,13 @@ Your tool (Cursor, Claude Code, any OpenAI SDK)
     Venice TEE enclave  ← only place that ever sees plaintext
 ```
 
-**Point any OpenAI-compatible tool at `http://localhost:3333` and your prompts are end-to-end encrypted to Venice's TEE. Venice's own infrastructure never sees your plaintext.**
+**Point any OpenAI-compatible tool that makes requests locally at `http://localhost:3333` and your prompts are end-to-end encrypted to Venice's TEE. Venice's own infrastructure never sees your plaintext.**
 
 ## Why this exists
 
-Venice launched TEE + E2EE inference in March 2026. Their web UI and CLI (`veniceai-cli`) both perform client-side encryption — Venice's servers only receive ciphertext, and the TEE enclave is the only place decryption happens.
+It's not truly E2EE unless you're encrypting on your machine. Venice's web UI serves the encryption code from their own servers — you're trusting them to send honest JavaScript. This proxy runs the encryption locally, from auditable code, before anything touches the network.
 
-But there's an important distinction: the web UI's encryption code is JavaScript served by Venice's own servers on every page load. You're trusting Venice to serve honest code. If their servers were compromised, malicious JS could exfiltrate your plaintext or keys before encryption.
-
-This proxy is different. The encryption runs locally, from code you can audit and pin. Venice's servers are never in the path of serving the encryption logic. And if you want to use Cursor, Claude Code, or any other tool that speaks the OpenAI API — you'd otherwise be sending plaintext to Venice with no E2EE at all. This proxy closes that gap for any OpenAI-compatible tool, with stronger trust guarantees than the web UI.
+It also means any OpenAI-compatible tool that runs locally (Continue.dev, your own scripts) gets real E2EE without knowing about it — just point it at `localhost:3333`.
 
 ## How it works
 
@@ -96,12 +94,14 @@ curl http://localhost:3333/v1/chat/completions \
   -d '{"model":"e2ee-glm-5","messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
-```
-# Cursor / Windsurf / any OpenAI-compatible tool
-# Settings → AI Provider → OpenAI-compatible
+```bash
+# Continue.dev (VS Code extension) — requests go from your machine, works great
+# Settings → Models → Add Model → OpenAI-compatible
 # Base URL: http://localhost:3333/v1
 # API Key:  (anything — the proxy uses your .env key)
 ```
+
+> **Note:** Cursor and Windsurf route API calls through their own cloud servers, so `localhost:3333` is unreachable from their end — and your plaintext would hit their servers before reaching the proxy anyway, defeating E2EE. Use tools that make requests locally: Continue.dev, your own scripts, or the included chat REPL.
 
 ## Selecting a model
 
